@@ -279,12 +279,21 @@
             { key: "miet", label: "Mietwohnung" }
         ];
 
+        const numberFormatter = new Intl.NumberFormat("de-DE", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+
         function euro(value) {
-            return `${Number(value || 0).toFixed(2)} EUR`;
+            return `${numberFormatter.format(Number(value || 0))} EUR`;
         }
 
         function kwh(value) {
-            return `${Number(value || 0).toFixed(2)} kWh`;
+            return `${numberFormatter.format(Number(value || 0))} kWh`;
+        }
+
+        function num(value) {
+            return numberFormatter.format(Number(value || 0));
         }
 
         function showFeedback(targetId, text, isError = false) {
@@ -327,7 +336,7 @@
                 <tr>
                     <td>${t.gueltig_ab}</td>
                     <td>${euro(t.grundkosten_jahr)}</td>
-                    <td>${Number(t.arbeitspreis_kwh).toFixed(4)} EUR</td>
+                    <td>${num(t.arbeitspreis_kwh)} EUR</td>
                     <td>
                         <div class="actions">
                             <button class="small secondary" onclick="editTarif(${t.id})">Bearbeiten</button>
@@ -397,19 +406,19 @@
                     </div>
                     <div class="stat-box">
                         <div class="label">Verbrauch/Tag (letzte Periode, gesamt)</div>
-                        <div class="value">${Number(verbrauchGesamtProTag).toFixed(3)} kWh</div>
+                        <div class="value">${num(verbrauchGesamtProTag)} kWh</div>
                     </div>
                     <div class="stat-box">
                         <div class="label">Kosten/Tag (letzte Periode, gesamt)</div>
-                        <div class="value kosten">${Number(kostenGesamtProTag).toFixed(3)} EUR</div>
+                        <div class="value kosten">${num(kostenGesamtProTag)} EUR</div>
                     </div>
                     <div class="stat-box">
                         <div class="label">Verbrauch/Tag (Durchschnitt, gesamt)</div>
-                        <div class="value">${Number(durchschnitt.verbrauch_pro_tag || 0).toFixed(3)} kWh</div>
+                        <div class="value">${num(durchschnitt.verbrauch_pro_tag || 0)} kWh</div>
                     </div>
                     <div class="stat-box">
                         <div class="label">Kosten/Tag (Durchschnitt, gesamt)</div>
-                        <div class="value kosten">${Number(durchschnitt.kosten_pro_tag || 0).toFixed(3)} EUR</div>
+                        <div class="value kosten">${num(durchschnitt.kosten_pro_tag || 0)} EUR</div>
                     </div>
                 </div>
                 <table>
@@ -426,10 +435,10 @@
                         ${areas.map(a => `
                             <tr>
                                 <td>${a.label}</td>
-                                <td>${Number((Number(verbrauche[a.key] || 0) / Math.max(tage, 1))).toFixed(3)} kWh</td>
+                                <td>${num(Number(verbrauche[a.key] || 0) / Math.max(tage, 1))} kWh</td>
                                 <td>${euro(kosten[a.key])}</td>
-                                <td>${Number(avgVerbrauchByArea[a.key] || 0).toFixed(3)} kWh</td>
-                                <td>${Number(avgKostenByArea[a.key] || 0).toFixed(3)} EUR</td>
+                                <td>${num(avgVerbrauchByArea[a.key] || 0)} kWh</td>
+                                <td>${num(avgKostenByArea[a.key] || 0)} EUR</td>
                             </tr>
                         `).join("")}
                     </tbody>
@@ -492,7 +501,10 @@
                         }
                     },
                     y: {
-                        title: { display: true, text: `${unit}/Tag` }
+                        title: { display: true, text: `${unit}/Tag` },
+                        ticks: {
+                            callback: (value) => num(value)
+                        }
                     }
                 },
                 plugins: {
@@ -505,11 +517,11 @@
                             },
                             label: (context) => {
                                 const point = context.raw || { y: 0 };
-                                return `${context.dataset.label}: ${Number(point.y || 0).toFixed(3)} ${unit}/Tag`;
+                                return `${context.dataset.label}: ${num(point.y || 0)} ${unit}/Tag`;
                             },
                             afterLabel: (context) => {
                                 const point = context.raw || { raw: 0, tage: 0 };
-                                return `Im Zeitraum: ${Number(point.raw || 0).toFixed(2)} ${unit} (${point.tage} Tage)`;
+                                return `Im Zeitraum: ${num(point.raw || 0)} ${unit} (${point.tage} Tage)`;
                             }
                         }
                     }
