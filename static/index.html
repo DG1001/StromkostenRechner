@@ -274,7 +274,6 @@
 
         const areas = [
             { key: "gesamt", label: "Gesamt" },
-            { key: "haus", label: "Haus" },
             { key: "dach", label: "Dachgeschoss" },
             { key: "eg", label: "Erdgeschoss" },
             { key: "miet", label: "Mietwohnung" }
@@ -417,7 +416,7 @@
                     <thead>
                         <tr>
                             <th>Bereich</th>
-                            <th>Verbrauch letzte Periode</th>
+                            <th>Verbrauch/Tag letzte Periode</th>
                             <th>Kosten letzte Periode</th>
                             <th>Ø Verbrauch/Tag</th>
                             <th>Ø Kosten/Tag</th>
@@ -427,7 +426,7 @@
                         ${areas.map(a => `
                             <tr>
                                 <td>${a.label}</td>
-                                <td>${kwh(verbrauche[a.key])}</td>
+                                <td>${Number((Number(verbrauche[a.key] || 0) / Math.max(tage, 1))).toFixed(3)} kWh</td>
                                 <td>${euro(kosten[a.key])}</td>
                                 <td>${Number(avgVerbrauchByArea[a.key] || 0).toFixed(3)} kWh</td>
                                 <td>${Number(avgKostenByArea[a.key] || 0).toFixed(3)} EUR</td>
@@ -500,21 +499,33 @@
             anteilChart = new Chart(document.getElementById("anteilChart"), {
                 type: "bar",
                 data: {
-                    labels: ["Dachgeschoss", "Erdgeschoss", "Mietwohnung"],
-                    datasets: [{
-                        label: "Verbrauch letzte Periode (kWh)",
-                        data: [
-                            Number((data.verbrauche || {}).dach || 0),
-                            Number((data.verbrauche || {}).eg || 0),
-                            Number((data.verbrauche || {}).miet || 0)
-                        ],
-                        backgroundColor: [colors.dach, colors.eg, colors.miet]
-                    }]
+                    labels,
+                    datasets: [
+                        {
+                            label: "Dachgeschoss",
+                            data: verbrauchsReihen.map(r => Number(r.dach || 0)),
+                            backgroundColor: colors.dach
+                        },
+                        {
+                            label: "Erdgeschoss",
+                            data: verbrauchsReihen.map(r => Number(r.eg || 0)),
+                            backgroundColor: colors.eg
+                        },
+                        {
+                            label: "Mietwohnung",
+                            data: verbrauchsReihen.map(r => Number(r.miet || 0)),
+                            backgroundColor: colors.miet
+                        }
+                    ]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { title: { display: true, text: "Verbrauchsanteile der Stockwerke (Stichtag)" } }
+                    scales: {
+                        x: { stacked: true },
+                        y: { stacked: true }
+                    },
+                    plugins: { title: { display: true, text: "Verbrauchsanteile der Stockwerke je Zeitraum" } }
                 }
             });
         }

@@ -62,14 +62,14 @@
 ### Auswertungen
 - Dashboard mit:
   - Tage seit letzter Ablesung
-  - Verbrauch pro Tag im Ablesezeitraum (Gesamt + je Stockwerk: Haus, Dachgeschoss, Erdgeschoss, Mietwohnung)
+  - Verbrauch pro Tag im Ablesezeitraum (Gesamt + je Stockwerk: Dachgeschoss, Erdgeschoss, Mietwohnung)
   - Angefallene Kosten gesamt im Ablesezeitraum (Gesamt + je Stockwerk)
   - Durchschnittliche Verbrauch/Kosten pro Tag über alle erfassten Zeiträume
 
 ### Grafiken
 1. **Liniendiagramm Verbrauch**: Verbrauch über Zeit für alle Stockwerke (Haus, Dachgeschoss, Erdgeschoss, Mietwohnung) als separate Linien
 2. **Liniendiagramm Kosten**: Kosten über Zeit für alle Stockwerke als separate Linien
-3. **Balkendiagramm**: Verbrauchsanteile der Stockwerke (Dachgeschoss, Erdgeschoss, Mietwohnung) zum Stichtag
+3. **Balkendiagramm**: Verbrauchsanteile der Stockwerke (Dachgeschoss, Erdgeschoss, Mietwohnung) für jeden Zeitraum
 
 ### Mietwohnung-Abrechnung
 - Jahr auswählen
