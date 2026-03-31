@@ -152,6 +152,8 @@ def calculate_period(
     kosten["gesamt"] = kosten["haus"]
 
     return {
+        "von": prev_date,
+        "bis": curr_date,
         "datum": curr_date,
         "tage": tage,
         "verbrauche": verbrauche,
@@ -344,10 +346,22 @@ def auswertung():
     kosten_reihen = []
     for period in periods:
         verbrauchs_reihen.append(
-            {"datum": period["datum"], "tage": period["tage"], **period["verbrauche"]}
+            {
+                "von": period["von"],
+                "bis": period["bis"],
+                "datum": period["datum"],
+                "tage": period["tage"],
+                **period["verbrauche"],
+            }
         )
         kosten_reihen.append(
-            {"datum": period["datum"], "tage": period["tage"], **period["kosten"]}
+            {
+                "von": period["von"],
+                "bis": period["bis"],
+                "datum": period["datum"],
+                "tage": period["tage"],
+                **period["kosten"],
+            }
         )
 
     conn.close()
@@ -363,6 +377,7 @@ def auswertung():
             "verbrauch_pro_tag_je_bereich": avg_verbrauch,
             "kosten_pro_tag_je_bereich": avg_kosten,
         },
+        "ablesezeitpunkte": dates,
         "verbrauchs_reihen": verbrauchs_reihen,
         "kosten_reihen": kosten_reihen,
     }

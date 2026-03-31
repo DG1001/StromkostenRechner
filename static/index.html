@@ -306,12 +306,44 @@
         }
 
         async function api(path, options = {}) {
-            const response = await fetch(path, options);
+            const method = (options.method || "GET").toUpperCase();
+            let finalPath = path;
+            if (method === "GET") {
+                const separator = path.includes("?") ? "&" : "?";
+                finalPath = `${path}${separator}_ts=${Date.now()}`;
+            }
+            const response = await fetch(finalPath, options);
             const data = await response.json();
             if (!response.ok) {
                 throw new Error(data.detail || data.fehler || "API-Fehler");
             }
             return data;
+        }
+
+        function getMissingByDate() {
+            const required = ["HAUS", "DACHGESCHOSS", "MIETWOHNUNG"];
+            const byDate = new Map();
+
+            for (const row of zaehlerCache) {
+                const dateKey = row.ablesedatum;
+                if (!byDate.has(dateKey)) {
+                    byDate.set(dateKey, new Set());
+                }
+                byDate.get(dateKey).add(row.standort);
+            }
+
+            const dates = Array.from(byDate.keys()).sort((a, b) => b.localeCompare(a));
+            const missing = [];
+
+            for (const dateKey of dates) {
+                const present = byDate.get(dateKey);
+                const missingAtDate = required.filter(s => !present.has(s));
+                if (missingAtDate.length > 0) {
+                    missing.push({ datum: dateKey, fehlt: missingAtDate });
+                }
+            }
+
+            return missing;
         }
 
         async function loadData() {
@@ -368,8 +400,28 @@
 
         function renderAuswertung(data) {
             const stats = document.getElementById("stats");
+            const missingByDate = getMissingByDate();
+            const latestAnyDate = zaehlerCache.length
+                ? zaehlerCache.map(z => z.ablesedatum).sort((a, b) => b.localeCompare(a))[0]
+                : null;
+
+            const hintHtml = (() => {
+                if (!latestAnyDate) return "";
+
+                const latestMissing = missingByDate.find(x => x.datum === latestAnyDate);
+                if (latestMissing) {
+                    return `<div class="error">Für das neueste Ablesedatum ${latestAnyDate} fehlen noch Werte für: ${latestMissing.fehlt.join(", ")}. Diagramme aktualisieren sich erst, wenn alle drei Zählerstände für ein Datum vorhanden sind.</div>`;
+                }
+
+                if (!data.fehler && data.latest_date && latestAnyDate > data.latest_date) {
+                    return `<div class="error">Neuere Ablesungen vorhanden (${latestAnyDate}), aber noch nicht vollständig. Die Auswertung nutzt aktuell ${data.latest_date}.</div>`;
+                }
+
+                return "";
+            })();
+
             if (data.fehler) {
-                stats.innerHTML = `<div class="error">${data.fehler}</div>`;
+                stats.innerHTML = `${hintHtml}<div class="error">${data.fehler}</div>`;
                 destroyCharts();
                 return;
             }
@@ -399,6 +451,7 @@
             const kostenGesamtProTag = tage > 0 ? kostenGesamt / tage : 0;
 
             stats.innerHTML = `
+                ${hintHtml}
                 <div class="stats-grid">
                     <div class="stat-box">
                         <div class="label">Tage seit letzter Ablesung</div>
@@ -465,7 +518,10 @@
 
             const toTimestamp = (isoDate) => new Date(`${isoDate}T00:00:00`).getTime();
             const formatDate = (ts) => new Date(ts).toLocaleDateString("de-DE");
-            const barLabels = verbrauchsReihen.map(r => `${r.datum} (${r.tage || 0} Tage)`);
+            const barLabels = verbrauchsReihen.map(r => `${r.von || r.datum} bis ${r.bis || r.datum} (${r.tage || 0} Tage)`);
+            const ablesezeitpunkte = Array.isArray(data.ablesezeitpunkte) ? data.ablesezeitpunkte : [];
+            const axisMin = ablesezeitpunkte.length ? toTimestamp(ablesezeitpunkte[0]) : undefined;
+            const axisMax = ablesezeitpunkte.length ? toTimestamp(ablesezeitpunkte[ablesezeitpunkte.length - 1]) : undefined;
             const colors = {
                 haus: "#2d7d4f",
                 dach: "#2877b8",
@@ -481,6 +537,8 @@
                     y: tage > 0 ? raw / tage : 0,
                     raw,
                     tage,
+                    von: r.von || r.datum,
+                    bis: r.bis || r.datum,
                     datum: r.datum
                 };
             });
@@ -495,6 +553,8 @@
                 scales: {
                     x: {
                         type: "linear",
+                        min: axisMin,
+                        max: axisMax,
                         title: { display: true, text: "Ablesedatum" },
                         ticks: {
                             callback: (value) => formatDate(Number(value))
@@ -521,7 +581,10 @@
                             },
                             afterLabel: (context) => {
                                 const point = context.raw || { raw: 0, tage: 0 };
-                                return `Im Zeitraum: ${num(point.raw || 0)} ${unit} (${point.tage} Tage)`;
+                                return [
+                                    `Zeitraum: ${point.von || "-"} bis ${point.bis || "-"}`,
+                                    `Im Zeitraum: ${num(point.raw || 0)} ${unit} (${point.tage} Tage)`
+                                ];
                             }
                         }
                     }
