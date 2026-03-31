@@ -396,7 +396,6 @@ def mietwohnung_abrechnung(jahr: int):
         FROM zaehlerstaende
         WHERE standort = 'MIETWOHNUNG'
           AND strftime('%Y', ablesedatum) = ?
-          AND strftime('%m', ablesedatum) = '01'
         ORDER BY ablesedatum ASC
         LIMIT 1
         """,
@@ -405,7 +404,7 @@ def mietwohnung_abrechnung(jahr: int):
     start = cur.fetchone()
     if not start:
         conn.close()
-        return {"fehler": f"Kein Ablesezeitpunkt im Januar {jahr} gefunden"}
+        return {"fehler": f"Kein Ablesezeitpunkt im Jahr {jahr} gefunden"}
 
     next_year = str(jahr + 1)
     cur = conn.execute(
@@ -414,7 +413,6 @@ def mietwohnung_abrechnung(jahr: int):
         FROM zaehlerstaende
         WHERE standort = 'MIETWOHNUNG'
           AND strftime('%Y', ablesedatum) = ?
-          AND strftime('%m', ablesedatum) = '01'
         ORDER BY ablesedatum ASC
         LIMIT 1
         """,
@@ -423,7 +421,7 @@ def mietwohnung_abrechnung(jahr: int):
     end = cur.fetchone()
     if not end:
         conn.close()
-        return {"fehler": f"Kein Ablesezeitpunkt im Januar {jahr + 1} gefunden"}
+        return {"fehler": f"Kein Ablesezeitpunkt im Jahr {jahr + 1} gefunden"}
 
     start = dict(start)
     end = dict(end)
