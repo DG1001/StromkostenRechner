@@ -343,8 +343,12 @@ def auswertung():
     verbrauchs_reihen = []
     kosten_reihen = []
     for period in periods:
-        verbrauchs_reihen.append({"datum": period["datum"], **period["verbrauche"]})
-        kosten_reihen.append({"datum": period["datum"], **period["kosten"]})
+        verbrauchs_reihen.append(
+            {"datum": period["datum"], "tage": period["tage"], **period["verbrauche"]}
+        )
+        kosten_reihen.append(
+            {"datum": period["datum"], "tage": period["tage"], **period["kosten"]}
+        )
 
     conn.close()
 

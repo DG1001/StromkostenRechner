@@ -454,7 +454,9 @@
                 return;
             }
 
-            const labels = verbrauchsReihen.map(r => r.datum);
+            const toTimestamp = (isoDate) => new Date(`${isoDate}T00:00:00`).getTime();
+            const formatDate = (ts) => new Date(ts).toLocaleDateString("de-DE");
+            const barLabels = verbrauchsReihen.map(r => `${r.datum} (${r.tage || 0} Tage)`);
             const colors = {
                 haus: "#2d7d4f",
                 dach: "#2877b8",
@@ -462,44 +464,88 @@
                 miet: "#7a4fb8"
             };
 
-            const lineOptions = (title) => ({
+            const buildLinePoints = (rows, key) => rows.map(r => {
+                const tage = Number(r.tage || 1);
+                const raw = Number(r[key] || 0);
+                return {
+                    x: toTimestamp(r.datum),
+                    y: tage > 0 ? raw / tage : 0,
+                    raw,
+                    tage,
+                    datum: r.datum
+                };
+            });
+
+            const lineOptions = (title, unit) => ({
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: { title: { display: true, text: title } }
+                interaction: {
+                    mode: "nearest",
+                    intersect: false
+                },
+                scales: {
+                    x: {
+                        type: "linear",
+                        title: { display: true, text: "Ablesedatum" },
+                        ticks: {
+                            callback: (value) => formatDate(Number(value))
+                        }
+                    },
+                    y: {
+                        title: { display: true, text: `${unit}/Tag` }
+                    }
+                },
+                plugins: {
+                    title: { display: true, text: title },
+                    tooltip: {
+                        callbacks: {
+                            title: (items) => {
+                                if (!items.length) return "";
+                                return formatDate(items[0].raw.x);
+                            },
+                            label: (context) => {
+                                const point = context.raw || { y: 0 };
+                                return `${context.dataset.label}: ${Number(point.y || 0).toFixed(3)} ${unit}/Tag`;
+                            },
+                            afterLabel: (context) => {
+                                const point = context.raw || { raw: 0, tage: 0 };
+                                return `Im Zeitraum: ${Number(point.raw || 0).toFixed(2)} ${unit} (${point.tage} Tage)`;
+                            }
+                        }
+                    }
+                }
             });
 
             verbrauchChart = new Chart(document.getElementById("verbrauchChart"), {
                 type: "line",
                 data: {
-                    labels,
                     datasets: [
-                        { label: "Haus", data: verbrauchsReihen.map(r => Number(r.haus || 0)), borderColor: colors.haus, backgroundColor: colors.haus, tension: 0.25 },
-                        { label: "Dachgeschoss", data: verbrauchsReihen.map(r => Number(r.dach || 0)), borderColor: colors.dach, backgroundColor: colors.dach, tension: 0.25 },
-                        { label: "Erdgeschoss", data: verbrauchsReihen.map(r => Number(r.eg || 0)), borderColor: colors.eg, backgroundColor: colors.eg, tension: 0.25 },
-                        { label: "Mietwohnung", data: verbrauchsReihen.map(r => Number(r.miet || 0)), borderColor: colors.miet, backgroundColor: colors.miet, tension: 0.25 }
+                        { label: "Haus", data: buildLinePoints(verbrauchsReihen, "haus"), borderColor: colors.haus, backgroundColor: colors.haus, tension: 0.25 },
+                        { label: "Dachgeschoss", data: buildLinePoints(verbrauchsReihen, "dach"), borderColor: colors.dach, backgroundColor: colors.dach, tension: 0.25 },
+                        { label: "Erdgeschoss", data: buildLinePoints(verbrauchsReihen, "eg"), borderColor: colors.eg, backgroundColor: colors.eg, tension: 0.25 },
+                        { label: "Mietwohnung", data: buildLinePoints(verbrauchsReihen, "miet"), borderColor: colors.miet, backgroundColor: colors.miet, tension: 0.25 }
                     ]
                 },
-                options: lineOptions("Verbrauch je Ablesezeitpunkt")
+                options: lineOptions("Verbrauch pro Tag je Ablesezeitpunkt", "kWh")
             });
 
             kostenChart = new Chart(document.getElementById("kostenChart"), {
                 type: "line",
                 data: {
-                    labels,
                     datasets: [
-                        { label: "Haus", data: kostenReihen.map(r => Number(r.haus || 0)), borderColor: colors.haus, backgroundColor: colors.haus, tension: 0.25 },
-                        { label: "Dachgeschoss", data: kostenReihen.map(r => Number(r.dach || 0)), borderColor: colors.dach, backgroundColor: colors.dach, tension: 0.25 },
-                        { label: "Erdgeschoss", data: kostenReihen.map(r => Number(r.eg || 0)), borderColor: colors.eg, backgroundColor: colors.eg, tension: 0.25 },
-                        { label: "Mietwohnung", data: kostenReihen.map(r => Number(r.miet || 0)), borderColor: colors.miet, backgroundColor: colors.miet, tension: 0.25 }
+                        { label: "Haus", data: buildLinePoints(kostenReihen, "haus"), borderColor: colors.haus, backgroundColor: colors.haus, tension: 0.25 },
+                        { label: "Dachgeschoss", data: buildLinePoints(kostenReihen, "dach"), borderColor: colors.dach, backgroundColor: colors.dach, tension: 0.25 },
+                        { label: "Erdgeschoss", data: buildLinePoints(kostenReihen, "eg"), borderColor: colors.eg, backgroundColor: colors.eg, tension: 0.25 },
+                        { label: "Mietwohnung", data: buildLinePoints(kostenReihen, "miet"), borderColor: colors.miet, backgroundColor: colors.miet, tension: 0.25 }
                     ]
                 },
-                options: lineOptions("Kosten je Ablesezeitpunkt")
+                options: lineOptions("Kosten pro Tag je Ablesezeitpunkt", "EUR")
             });
 
             anteilChart = new Chart(document.getElementById("anteilChart"), {
                 type: "bar",
                 data: {
-                    labels,
+                    labels: barLabels,
                     datasets: [
                         {
                             label: "Dachgeschoss",
