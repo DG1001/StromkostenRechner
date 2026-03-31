@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stromkosten-Rechner</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: "Segoe UI", Tahoma, sans-serif;
+            background: linear-gradient(180deg, #f2f6f4 0%, #edf1ef 100%);
+            color: #1f2a24;
+            padding: 20px;
+        }
+        .container { max-width: 1280px; margin: 0 auto; }
+        h1 { margin-bottom: 20px; }
+        h2 { margin-bottom: 12px; }
+        h3 { margin: 16px 0 10px; }
+
+        .card {
+            background: #fff;
+            border: 1px solid #dfe7e2;
+            border-radius: 12px;
+            padding: 18px;
+            margin-bottom: 16px;
+            box-shadow: 0 3px 10px rgba(26, 45, 33, 0.05);
+        }
+
+        .form-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 8px;
+        }
+        .form-row > div { flex: 1; min-width: 180px; }
+
+        label {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 0.9rem;
+            color: #385244;
+            font-weight: 600;
+        }
+        input, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #c9d7cf;
+            border-radius: 8px;
+            background: #fff;
+        }
+
+        button {
+            border: none;
+            border-radius: 8px;
+            padding: 10px 14px;
+            cursor: pointer;
+            font-weight: 600;
+            background: #2d7d4f;
+            color: #fff;
+        }
+        button.secondary { background: #5f7366; }
+        button.warn { background: #b24635; }
+        button.small { padding: 6px 9px; font-size: 0.85rem; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+        }
+        th, td {
+            text-align: left;
+            border-bottom: 1px solid #e6ece8;
+            padding: 10px;
+            vertical-align: middle;
+        }
+        th { background: #f6faf7; }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        .stat-box {
+            border: 1px solid #d7e3dc;
+            border-radius: 10px;
+            padding: 12px;
+            background: #f9fcfa;
+        }
+        .stat-box .label { font-size: 0.85rem; color: #4d6659; }
+        .stat-box .value { font-size: 1.25rem; font-weight: 700; margin-top: 4px; }
+        .kosten { color: #9e3124; }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        .chart-full { grid-column: 1 / -1; }
+        .chart-container { height: 320px; }
+        @media (max-width: 900px) {
+            .charts-grid { grid-template-columns: 1fr; }
+            .chart-full { grid-column: auto; }
+        }
+
+        .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+        .error {
+            border: 1px solid #eac8c2;
+            color: #952a1d;
+            background: #fff4f2;
+            border-radius: 8px;
+            padding: 10px;
+        }
+        .ok {
+            border: 1px solid #cde4d3;
+            color: #1f6536;
+            background: #f2fbf5;
+            border-radius: 8px;
+            padding: 8px;
+            margin-bottom: 8px;
+        }
+
+        .abrechnung {
+            background: #fffdf7;
+            border: 1px solid #efe0b8;
+            border-radius: 10px;
+            padding: 14px;
+        }
+        .abrechnung-row {
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px solid #eee2be;
+            padding: 7px 0;
+        }
+        .abrechnung-row:last-child {
+            border-bottom: none;
+            font-weight: 700;
+            font-size: 1.05rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Stromkosten-Rechner</h1>
+
+        <div class="card">
+            <h2>Tarife verwalten</h2>
+            <div id="tarif-feedback"></div>
+            <div class="form-row">
+                <div>
+                    <label>Gültig ab</label>
+                    <input type="date" id="tarifdatum">
+                </div>
+                <div>
+                    <label>Grundkosten/Jahr (EUR)</label>
+                    <input type="number" step="0.01" id="grundkosten">
+                </div>
+                <div>
+                    <label>Arbeitspreis/kWh (EUR)</label>
+                    <input type="number" step="0.0001" id="arbeitspreis">
+                </div>
+            </div>
+            <div class="actions">
+                <button id="tarif-submit" onclick="saveTarif()">Tarif hinzufügen</button>
+                <button class="secondary" onclick="cancelTarifEdit()">Abbrechen</button>
+            </div>
+
+            <h3>Tarifliste</h3>
+            <table id="tarife-table">
+                <thead>
+                    <tr>
+                        <th>Gültig ab</th>
+                        <th>Grundkosten/Jahr</th>
+                        <th>Arbeitspreis/kWh</th>
+                        <th>Aktionen</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h2>Zählerstände erfassen</h2>
+            <div id="zaehler-feedback"></div>
+            <div class="form-row">
+                <div>
+                    <label>Standort</label>
+                    <select id="standort">
+                        <option value="HAUS">Haus (gesamt)</option>
+                        <option value="DACHGESCHOSS">Dachgeschoss</option>
+                        <option value="MIETWOHNUNG">Mietwohnung</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Zählerstand (kWh)</label>
+                    <input type="number" step="0.01" id="zaehlerstand">
+                </div>
+                <div>
+                    <label>Ablesedatum</label>
+                    <input type="date" id="ablesedatum">
+                </div>
+            </div>
+            <div class="form-row">
+                <div>
+                    <label>Bemerkung (optional)</label>
+                    <input type="text" id="bemerkung">
+                </div>
+            </div>
+            <div class="actions">
+                <button id="zaehler-submit" onclick="saveZaehlerstand()">Zählerstand speichern</button>
+                <button class="secondary" onclick="cancelZaehlerEdit()">Abbrechen</button>
+            </div>
+
+            <h3>Zählerstandsliste</h3>
+            <table id="zaehler-table">
+                <thead>
+                    <tr>
+                        <th>Datum</th>
+                        <th>Standort</th>
+                        <th>Zählerstand</th>
+                        <th>Bemerkung</th>
+                        <th>Aktionen</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h2>Auswertung</h2>
+            <div id="stats"></div>
+        </div>
+
+        <div class="card">
+            <h2>Diagramme</h2>
+            <div class="charts-grid">
+                <div class="chart-container">
+                    <canvas id="verbrauchChart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <canvas id="kostenChart"></canvas>
+                </div>
+                <div class="chart-container chart-full">
+                    <canvas id="anteilChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Mietwohnung-Abrechnung</h2>
+            <div class="form-row">
+                <div>
+                    <label>Jahr</label>
+                    <input type="number" id="abrechnungsjahr" value="2025">
+                </div>
+                <div style="align-self: end;">
+                    <button onclick="berechneAbrechnung()">Abrechnung erstellen</button>
+                </div>
+            </div>
+            <div id="abrechnung-ergebnis"></div>
+        </div>
+    </div>
+
+    <script>
+        let verbrauchChart;
+        let kostenChart;
+        let anteilChart;
+
+        let editTarifId = null;
+        let editZaehlerId = null;
+        let tarifeCache = [];
+        let zaehlerCache = [];
+
+        const areas = [
+            { key: "gesamt", label: "Gesamt" },
+            { key: "haus", label: "Haus" },
+            { key: "dach", label: "Dachgeschoss" },
+            { key: "eg", label: "Erdgeschoss" },
+            { key: "miet", label: "Mietwohnung" }
+        ];
+
+        function euro(value) {
+            return `${Number(value || 0).toFixed(2)} EUR`;
+        }
+
+        function kwh(value) {
+            return `${Number(value || 0).toFixed(2)} kWh`;
+        }
+
+        function showFeedback(targetId, text, isError = false) {
+            const node = document.getElementById(targetId);
+            if (!text) {
+                node.innerHTML = "";
+                return;
+            }
+            node.innerHTML = `<div class="${isError ? "error" : "ok"}">${text}</div>`;
+        }
+
+        async function api(path, options = {}) {
+            const response = await fetch(path, options);
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.detail || data.fehler || "API-Fehler");
+            }
+            return data;
+        }
+
+        async function loadData() {
+            try {
+                const [tarife, zaehler, auswertung] = await Promise.all([
+                    api("/api/tarife"),
+                    api("/api/zaehlerstaende"),
+                    api("/api/auswertung").catch(() => ({ fehler: "Noch keine Auswertung möglich" }))
+                ]);
+                renderTarife(tarife);
+                renderZaehlerstaende(zaehler);
+                renderAuswertung(auswertung);
+            } catch (error) {
+                document.getElementById("stats").innerHTML = `<div class="error">${error.message}</div>`;
+            }
+        }
+
+        function renderTarife(tarife) {
+            tarifeCache = tarife;
+            const tbody = document.querySelector("#tarife-table tbody");
+            tbody.innerHTML = tarife.map(t => `
+                <tr>
+                    <td>${t.gueltig_ab}</td>
+                    <td>${euro(t.grundkosten_jahr)}</td>
+                    <td>${Number(t.arbeitspreis_kwh).toFixed(4)} EUR</td>
+                    <td>
+                        <div class="actions">
+                            <button class="small secondary" onclick="editTarif(${t.id})">Bearbeiten</button>
+                            <button class="small warn" onclick='deleteTarif(${t.id})'>Löschen</button>
+                        </div>
+                    </td>
+                </tr>
+            `).join("");
+        }
+
+        function renderZaehlerstaende(zaehler) {
+            zaehlerCache = zaehler;
+            const tbody = document.querySelector("#zaehler-table tbody");
+            tbody.innerHTML = zaehler.map(z => `
+                <tr>
+                    <td>${z.ablesedatum}</td>
+                    <td>${z.standort}</td>
+                    <td>${kwh(z.zaehlerstand)}</td>
+                    <td>${z.bemerkung || "-"}</td>
+                    <td>
+                        <div class="actions">
+                            <button class="small secondary" onclick="editZaehlerstand(${z.id})">Bearbeiten</button>
+                            <button class="small warn" onclick='deleteZaehlerstand(${z.id})'>Löschen</button>
+                        </div>
+                    </td>
+                </tr>
+            `).join("");
+        }
+
+        function renderAuswertung(data) {
+            const stats = document.getElementById("stats");
+            if (data.fehler) {
+                stats.innerHTML = `<div class="error">${data.fehler}</div>`;
+                destroyCharts();
+                return;
+            }
+
+            const verbrauche = data.verbrauche || {};
+            const kosten = data.kosten || {};
+            const durchschnitt = data.durchschnitt || {};
+            const avgVerbrauchByArea = durchschnitt.verbrauch_pro_tag_je_bereich || {
+                gesamt: durchschnitt.verbrauch_pro_tag || 0,
+                haus: durchschnitt.verbrauch_pro_tag || 0,
+                dach: 0,
+                eg: 0,
+                miet: 0
+            };
+            const avgKostenByArea = durchschnitt.kosten_pro_tag_je_bereich || {
+                gesamt: durchschnitt.kosten_pro_tag || 0,
+                haus: durchschnitt.kosten_pro_tag || 0,
+                dach: 0,
+                eg: 0,
+                miet: 0
+            };
+
+            const tage = data.tage_seit_letzt || 0;
+            const verbrauchGesamt = Number(verbrauche.gesamt ?? verbrauche.haus ?? 0);
+            const kostenGesamt = Number(kosten.gesamt ?? kosten.haus ?? 0);
+            const verbrauchGesamtProTag = tage > 0 ? verbrauchGesamt / tage : 0;
+            const kostenGesamtProTag = tage > 0 ? kostenGesamt / tage : 0;
+
+            stats.innerHTML = `
+                <div class="stats-grid">
+                    <div class="stat-box">
+                        <div class="label">Tage seit letzter Ablesung</div>
+                        <div class="value">${tage}</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="label">Verbrauch/Tag (letzte Periode, gesamt)</div>
+                        <div class="value">${Number(verbrauchGesamtProTag).toFixed(3)} kWh</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="label">Kosten/Tag (letzte Periode, gesamt)</div>
+                        <div class="value kosten">${Number(kostenGesamtProTag).toFixed(3)} EUR</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="label">Verbrauch/Tag (Durchschnitt, gesamt)</div>
+                        <div class="value">${Number(durchschnitt.verbrauch_pro_tag || 0).toFixed(3)} kWh</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="label">Kosten/Tag (Durchschnitt, gesamt)</div>
+                        <div class="value kosten">${Number(durchschnitt.kosten_pro_tag || 0).toFixed(3)} EUR</div>
+                    </div>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Bereich</th>
+                            <th>Verbrauch letzte Periode</th>
+                            <th>Kosten letzte Periode</th>
+                            <th>Ø Verbrauch/Tag</th>
+                            <th>Ø Kosten/Tag</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${areas.map(a => `
+                            <tr>
+                                <td>${a.label}</td>
+                                <td>${kwh(verbrauche[a.key])}</td>
+                                <td>${euro(kosten[a.key])}</td>
+                                <td>${Number(avgVerbrauchByArea[a.key] || 0).toFixed(3)} kWh</td>
+                                <td>${Number(avgKostenByArea[a.key] || 0).toFixed(3)} EUR</td>
+                            </tr>
+                        `).join("")}
+                    </tbody>
+                </table>
+            `;
+
+            updateCharts(data);
+        }
+
+        function destroyCharts() {
+            if (verbrauchChart) verbrauchChart.destroy();
+            if (kostenChart) kostenChart.destroy();
+            if (anteilChart) anteilChart.destroy();
+        }
+
+        function updateCharts(data) {
+            destroyCharts();
+
+            const verbrauchsReihen = Array.isArray(data.verbrauchs_reihen) ? data.verbrauchs_reihen : [];
+            const kostenReihen = Array.isArray(data.kosten_reihen) ? data.kosten_reihen : [];
+            if (verbrauchsReihen.length === 0) {
+                return;
+            }
+
+            const labels = verbrauchsReihen.map(r => r.datum);
+            const colors = {
+                haus: "#2d7d4f",
+                dach: "#2877b8",
+                eg: "#c47a2c",
+                miet: "#7a4fb8"
+            };
+
+            const lineOptions = (title) => ({
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { title: { display: true, text: title } }
+            });
+
+            verbrauchChart = new Chart(document.getElementById("verbrauchChart"), {
+                type: "line",
+                data: {
+                    labels,
+                    datasets: [
+                        { label: "Haus", data: verbrauchsReihen.map(r => Number(r.haus || 0)), borderColor: colors.haus, backgroundColor: colors.haus, tension: 0.25 },
+                        { label: "Dachgeschoss", data: verbrauchsReihen.map(r => Number(r.dach || 0)), borderColor: colors.dach, backgroundColor: colors.dach, tension: 0.25 },
+                        { label: "Erdgeschoss", data: verbrauchsReihen.map(r => Number(r.eg || 0)), borderColor: colors.eg, backgroundColor: colors.eg, tension: 0.25 },
+                        { label: "Mietwohnung", data: verbrauchsReihen.map(r => Number(r.miet || 0)), borderColor: colors.miet, backgroundColor: colors.miet, tension: 0.25 }
+                    ]
+                },
+                options: lineOptions("Verbrauch je Ablesezeitpunkt")
+            });
+
+            kostenChart = new Chart(document.getElementById("kostenChart"), {
+                type: "line",
+                data: {
+                    labels,
+                    datasets: [
+                        { label: "Haus", data: kostenReihen.map(r => Number(r.haus || 0)), borderColor: colors.haus, backgroundColor: colors.haus, tension: 0.25 },
+                        { label: "Dachgeschoss", data: kostenReihen.map(r => Number(r.dach || 0)), borderColor: colors.dach, backgroundColor: colors.dach, tension: 0.25 },
+                        { label: "Erdgeschoss", data: kostenReihen.map(r => Number(r.eg || 0)), borderColor: colors.eg, backgroundColor: colors.eg, tension: 0.25 },
+                        { label: "Mietwohnung", data: kostenReihen.map(r => Number(r.miet || 0)), borderColor: colors.miet, backgroundColor: colors.miet, tension: 0.25 }
+                    ]
+                },
+                options: lineOptions("Kosten je Ablesezeitpunkt")
+            });
+
+            anteilChart = new Chart(document.getElementById("anteilChart"), {
+                type: "bar",
+                data: {
+                    labels: ["Dachgeschoss", "Erdgeschoss", "Mietwohnung"],
+                    datasets: [{
+                        label: "Verbrauch letzte Periode (kWh)",
+                        data: [
+                            Number((data.verbrauche || {}).dach || 0),
+                            Number((data.verbrauche || {}).eg || 0),
+                            Number((data.verbrauche || {}).miet || 0)
+                        ],
+                        backgroundColor: [colors.dach, colors.eg, colors.miet]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { title: { display: true, text: "Verbrauchsanteile der Stockwerke (Stichtag)" } }
+                }
+            });
+        }
+
+        function editTarif(id) {
+            const tarif = tarifeCache.find(t => t.id === id);
+            if (!tarif) return;
+            editTarifId = tarif.id;
+            document.getElementById("tarifdatum").value = tarif.gueltig_ab;
+            document.getElementById("grundkosten").value = tarif.grundkosten_jahr;
+            document.getElementById("arbeitspreis").value = tarif.arbeitspreis_kwh;
+            document.getElementById("tarif-submit").textContent = "Tarif aktualisieren";
+            showFeedback("tarif-feedback", "Bearbeitungsmodus aktiv");
+        }
+
+        function cancelTarifEdit() {
+            editTarifId = null;
+            document.getElementById("tarifdatum").valueAsDate = new Date();
+            document.getElementById("grundkosten").value = "";
+            document.getElementById("arbeitspreis").value = "";
+            document.getElementById("tarif-submit").textContent = "Tarif hinzufügen";
+            showFeedback("tarif-feedback", "");
+        }
+
+        async function saveTarif() {
+            const gueltig_ab = document.getElementById("tarifdatum").value;
+            const grundkosten_jahr = Number(document.getElementById("grundkosten").value);
+            const arbeitspreis_kwh = Number(document.getElementById("arbeitspreis").value);
+
+            if (!gueltig_ab || !Number.isFinite(grundkosten_jahr) || !Number.isFinite(arbeitspreis_kwh)) {
+                showFeedback("tarif-feedback", "Bitte alle Tarif-Felder korrekt ausfüllen", true);
+                return;
+            }
+
+            try {
+                const payload = { gueltig_ab, grundkosten_jahr, arbeitspreis_kwh };
+                if (editTarifId) {
+                    await api(`/api/tarife/${editTarifId}`, {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(payload)
+                    });
+                    showFeedback("tarif-feedback", "Tarif aktualisiert");
+                } else {
+                    await api("/api/tarife", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(payload)
+                    });
+                    showFeedback("tarif-feedback", "Tarif hinzugefügt");
+                }
+                cancelTarifEdit();
+                await loadData();
+            } catch (error) {
+                showFeedback("tarif-feedback", error.message, true);
+            }
+        }
+
+        async function deleteTarif(id) {
+            if (!confirm("Tarif wirklich löschen?")) return;
+            try {
+                await api(`/api/tarife/${id}`, { method: "DELETE" });
+                showFeedback("tarif-feedback", "Tarif gelöscht");
+                await loadData();
+            } catch (error) {
+                showFeedback("tarif-feedback", error.message, true);
+            }
+        }
+
+        function editZaehlerstand(id) {
+            const z = zaehlerCache.find(item => item.id === id);
+            if (!z) return;
+            editZaehlerId = z.id;
+            document.getElementById("standort").value = z.standort;
+            document.getElementById("zaehlerstand").value = z.zaehlerstand;
+            document.getElementById("ablesedatum").value = z.ablesedatum;
+            document.getElementById("bemerkung").value = z.bemerkung || "";
+            document.getElementById("zaehler-submit").textContent = "Zählerstand aktualisieren";
+            showFeedback("zaehler-feedback", "Bearbeitungsmodus aktiv");
+        }
+
+        function cancelZaehlerEdit() {
+            editZaehlerId = null;
+            document.getElementById("standort").value = "HAUS";
+            document.getElementById("zaehlerstand").value = "";
+            document.getElementById("ablesedatum").valueAsDate = new Date();
+            document.getElementById("bemerkung").value = "";
+            document.getElementById("zaehler-submit").textContent = "Zählerstand speichern";
+            showFeedback("zaehler-feedback", "");
+        }
+
+        async function saveZaehlerstand() {
+            const payload = {
+                standort: document.getElementById("standort").value,
+                zaehlerstand: Number(document.getElementById("zaehlerstand").value),
+                ablesedatum: document.getElementById("ablesedatum").value,
+                bemerkung: document.getElementById("bemerkung").value || null
+            };
+
+            if (!payload.ablesedatum || !Number.isFinite(payload.zaehlerstand)) {
+                showFeedback("zaehler-feedback", "Bitte Standort, Datum und Zählerstand korrekt ausfüllen", true);
+                return;
+            }
+
+            try {
+                if (editZaehlerId) {
+                    await api(`/api/zaehlerstaende/${editZaehlerId}`, {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(payload)
+                    });
+                    showFeedback("zaehler-feedback", "Zählerstand aktualisiert");
+                } else {
+                    await api("/api/zaehlerstaende", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(payload)
+                    });
+                    showFeedback("zaehler-feedback", "Zählerstand gespeichert");
+                }
+                cancelZaehlerEdit();
+                await loadData();
+            } catch (error) {
+                showFeedback("zaehler-feedback", error.message, true);
+            }
+        }
+
+        async function deleteZaehlerstand(id) {
+            if (!confirm("Zählerstand wirklich löschen?")) return;
+            try {
+                await api(`/api/zaehlerstaende/${id}`, { method: "DELETE" });
+                showFeedback("zaehler-feedback", "Zählerstand gelöscht");
+                await loadData();
+            } catch (error) {
+                showFeedback("zaehler-feedback", error.message, true);
+            }
+        }
+
+        async function berechneAbrechnung() {
+            const jahr = Number(document.getElementById("abrechnungsjahr").value);
+            if (!Number.isInteger(jahr) || jahr < 2000) {
+                document.getElementById("abrechnung-ergebnis").innerHTML = "<div class='error'>Bitte ein gültiges Jahr eingeben</div>";
+                return;
+            }
+
+            try {
+                const data = await api(`/api/mietwohnung/${jahr}`);
+                document.getElementById("abrechnung-ergebnis").innerHTML = `
+                    <div class="abrechnung">
+                        <h3>Betriebskostenabrechnung ${data.jahr}</h3>
+                        <div class="abrechnung-row"><span>Zeitraum</span><span>${data.zeitraum_von} bis ${data.zeitraum_bis}</span></div>
+                        <div class="abrechnung-row"><span>Tage</span><span>${data.tage}</span></div>
+                        <div class="abrechnung-row"><span>Zählerstand Beginn</span><span>${kwh(data.zaehlerstand_von)}</span></div>
+                        <div class="abrechnung-row"><span>Zählerstand Ende</span><span>${kwh(data.zaehlerstand_bis)}</span></div>
+                        <div class="abrechnung-row"><span>Verbrauch</span><span>${kwh(data.verbrauch_kwh)}</span></div>
+                        <div class="abrechnung-row"><span>Grundkostenanteil (18 Prozent)</span><span>${euro(data.grundkosten_anteil)}</span></div>
+                        <div class="abrechnung-row"><span>Arbeitskosten</span><span>${euro(data.arbeitskosten)}</span></div>
+                        <div class="abrechnung-row"><span>Gesamtkosten</span><span>${euro(data.gesamtkosten)}</span></div>
+                    </div>
+                `;
+            } catch (error) {
+                document.getElementById("abrechnung-ergebnis").innerHTML = `<div class="error">${error.message}</div>`;
+            }
+        }
+
+        document.getElementById("ablesedatum").valueAsDate = new Date();
+        document.getElementById("tarifdatum").valueAsDate = new Date();
+        loadData();
+    </script>
+</body>
+</html>
