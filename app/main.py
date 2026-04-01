@@ -384,21 +384,32 @@ async def restore_database(backup_file: UploadFile = File(...)):
     if not backup_file.filename or not backup_file.filename.lower().endswith(".db"):
         raise HTTPException(status_code=400, detail="Bitte eine .db-Datei hochladen")
 
-    fd, temp_file = tempfile.mkstemp(prefix="strom_restore_", suffix=".db")
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp_file = tempfile.mkstemp(
+        prefix="strom_restore_",
+        suffix=".db",
+        dir=str(DB_PATH.parent),
+    )
     os.close(fd)
     temp_path = Path(temp_file)
 
     try:
-        content = await backup_file.read()
-        if not content:
+        has_content = False
+        with temp_path.open("wb") as out_file:
+            while True:
+                chunk = await backup_file.read(1024 * 1024)
+                if not chunk:
+                    break
+                has_content = True
+                out_file.write(chunk)
+
+        if not has_content:
             raise HTTPException(
                 status_code=400, detail="Leere Datei kann nicht importiert werden"
             )
 
-        temp_path.write_bytes(content)
         validate_backup_schema(temp_path)
 
-        DB_PATH.parent.mkdir(parents=True, exist_ok=True)
         os.replace(temp_path, DB_PATH)
         return {"status": "ok"}
     finally:
