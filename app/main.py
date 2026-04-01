@@ -247,12 +247,18 @@ def get_zaehlerstaende():
 def add_zaehlerstand(zaehlerstand: Zaehlerstand):
     if zaehlerstand.standort not in STANDORTE:
         raise HTTPException(status_code=400, detail="Ungültiger Standort")
+    meter_value = float(zaehlerstand.zaehlerstand)
+    if not meter_value.is_integer():
+        raise HTTPException(
+            status_code=400,
+            detail="Der Zählerstand muss ohne Kommastellen erfasst werden",
+        )
     conn = get_db()
     conn.execute(
         "INSERT INTO zaehlerstaende (standort, zaehlerstand, ablesedatum, bemerkung) VALUES (?, ?, ?, ?)",
         (
             zaehlerstand.standort,
-            zaehlerstand.zaehlerstand,
+            int(meter_value),
             zaehlerstand.ablesedatum.isoformat(),
             zaehlerstand.bemerkung,
         ),
@@ -266,6 +272,12 @@ def add_zaehlerstand(zaehlerstand: Zaehlerstand):
 def update_zaehlerstand(zaehlerstand_id: int, zaehlerstand: Zaehlerstand):
     if zaehlerstand.standort not in STANDORTE:
         raise HTTPException(status_code=400, detail="Ungültiger Standort")
+    meter_value = float(zaehlerstand.zaehlerstand)
+    if not meter_value.is_integer():
+        raise HTTPException(
+            status_code=400,
+            detail="Der Zählerstand muss ohne Kommastellen erfasst werden",
+        )
     conn = get_db()
     cur = conn.execute("SELECT id FROM zaehlerstaende WHERE id = ?", (zaehlerstand_id,))
     if not cur.fetchone():
@@ -275,7 +287,7 @@ def update_zaehlerstand(zaehlerstand_id: int, zaehlerstand: Zaehlerstand):
         "UPDATE zaehlerstaende SET standort = ?, zaehlerstand = ?, ablesedatum = ?, bemerkung = ? WHERE id = ?",
         (
             zaehlerstand.standort,
-            zaehlerstand.zaehlerstand,
+            int(meter_value),
             zaehlerstand.ablesedatum.isoformat(),
             zaehlerstand.bemerkung,
             zaehlerstand_id,

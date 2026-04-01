@@ -194,7 +194,7 @@
                 </div>
                 <div>
                     <label>Zählerstand (kWh)</label>
-                    <input type="number" step="0.01" id="zaehlerstand">
+                    <input type="number" step="1" id="zaehlerstand">
                 </div>
                 <div>
                     <label>Ablesedatum</label>
@@ -213,6 +213,32 @@
             </div>
 
             <h3>Zählerstandsliste</h3>
+            <div class="form-row">
+                <div>
+                    <label>Filter Standort</label>
+                    <select id="zaehler-filter" onchange="onZaehlerListSettingsChange()">
+                        <option value="ALL">Alle</option>
+                        <option value="HAUS">Haus (gesamt)</option>
+                        <option value="DACHGESCHOSS">Dachgeschoss</option>
+                        <option value="MIETWOHNUNG">Mietwohnung</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Sortieren nach</label>
+                    <select id="zaehler-sort-field" onchange="onZaehlerListSettingsChange()">
+                        <option value="ablesedatum">Ablesedatum</option>
+                        <option value="standort">Standort</option>
+                        <option value="zaehlerstand">Zählerstand</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Richtung</label>
+                    <select id="zaehler-sort-dir" onchange="onZaehlerListSettingsChange()">
+                        <option value="desc">Absteigend</option>
+                        <option value="asc">Aufsteigend</option>
+                    </select>
+                </div>
+            </div>
             <table id="zaehler-table">
                 <thead>
                     <tr>
@@ -271,6 +297,9 @@
         let editZaehlerId = null;
         let tarifeCache = [];
         let zaehlerCache = [];
+        let zaehlerFilter = "ALL";
+        let zaehlerSortField = "ablesedatum";
+        let zaehlerSortDir = "desc";
 
         const areas = [
             { key: "gesamt", label: "Gesamt" },
@@ -283,6 +312,15 @@
             minimumFractionDigits: 2,
             maximumFractionDigits: 2
         });
+        const integerFormatter = new Intl.NumberFormat("de-DE", {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0
+        });
+        const dateFormatter = new Intl.DateTimeFormat("de-DE", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric"
+        });
 
         function euro(value) {
             return `${numberFormatter.format(Number(value || 0))} EUR`;
@@ -292,8 +330,20 @@
             return `${numberFormatter.format(Number(value || 0))} kWh`;
         }
 
+        function zaehlerstandKwh(value) {
+            return `${integerFormatter.format(Number(value || 0))} kWh`;
+        }
+
         function num(value) {
             return numberFormatter.format(Number(value || 0));
+        }
+
+        function formatIsoDate(isoDate) {
+            if (!isoDate || typeof isoDate !== "string") return "-";
+            const parts = isoDate.split("-");
+            if (parts.length !== 3) return isoDate;
+            const [year, month, day] = parts;
+            return `${day.padStart(2, "0")}.${month.padStart(2, "0")}.${year}`;
         }
 
         function showFeedback(targetId, text, isError = false) {
@@ -366,7 +416,7 @@
             const tbody = document.querySelector("#tarife-table tbody");
             tbody.innerHTML = tarife.map(t => `
                 <tr>
-                    <td>${t.gueltig_ab}</td>
+                    <td>${formatIsoDate(t.gueltig_ab)}</td>
                     <td>${euro(t.grundkosten_jahr)}</td>
                     <td>${num(t.arbeitspreis_kwh)} EUR</td>
                     <td>
@@ -379,14 +429,56 @@
             `).join("");
         }
 
+        function onZaehlerListSettingsChange() {
+            zaehlerFilter = document.getElementById("zaehler-filter").value;
+            zaehlerSortField = document.getElementById("zaehler-sort-field").value;
+            zaehlerSortDir = document.getElementById("zaehler-sort-dir").value;
+            renderZaehlerstaende(zaehlerCache);
+        }
+
+        function getDisplayedZaehlerstaende() {
+            let rows = [...zaehlerCache];
+
+            if (zaehlerFilter !== "ALL") {
+                rows = rows.filter(row => row.standort === zaehlerFilter);
+            }
+
+            rows.sort((a, b) => {
+                let compareResult = 0;
+
+                if (zaehlerSortField === "ablesedatum") {
+                    compareResult = String(a.ablesedatum || "").localeCompare(String(b.ablesedatum || ""));
+                } else if (zaehlerSortField === "standort") {
+                    compareResult = String(a.standort || "").localeCompare(String(b.standort || ""));
+                } else if (zaehlerSortField === "zaehlerstand") {
+                    compareResult = Number(a.zaehlerstand || 0) - Number(b.zaehlerstand || 0);
+                }
+
+                if (compareResult === 0) {
+                    compareResult = Number(a.id || 0) - Number(b.id || 0);
+                }
+
+                return zaehlerSortDir === "asc" ? compareResult : -compareResult;
+            });
+
+            return rows;
+        }
+
         function renderZaehlerstaende(zaehler) {
             zaehlerCache = zaehler;
             const tbody = document.querySelector("#zaehler-table tbody");
-            tbody.innerHTML = zaehler.map(z => `
+            const rows = getDisplayedZaehlerstaende();
+
+            if (rows.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5">Keine Zählerstände für den gewählten Filter gefunden</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = rows.map(z => `
                 <tr>
-                    <td>${z.ablesedatum}</td>
+                    <td>${formatIsoDate(z.ablesedatum)}</td>
                     <td>${z.standort}</td>
-                    <td>${kwh(z.zaehlerstand)}</td>
+                    <td>${zaehlerstandKwh(z.zaehlerstand)}</td>
                     <td>${z.bemerkung || "-"}</td>
                     <td>
                         <div class="actions">
@@ -410,11 +502,11 @@
 
                 const latestMissing = missingByDate.find(x => x.datum === latestAnyDate);
                 if (latestMissing) {
-                    return `<div class="error">Für das neueste Ablesedatum ${latestAnyDate} fehlen noch Werte für: ${latestMissing.fehlt.join(", ")}. Diagramme aktualisieren sich erst, wenn alle drei Zählerstände für ein Datum vorhanden sind.</div>`;
+                    return `<div class="error">Für das neueste Ablesedatum ${formatIsoDate(latestAnyDate)} fehlen noch Werte für: ${latestMissing.fehlt.join(", ")}. Diagramme aktualisieren sich erst, wenn alle drei Zählerstände für ein Datum vorhanden sind.</div>`;
                 }
 
                 if (!data.fehler && data.latest_date && latestAnyDate > data.latest_date) {
-                    return `<div class="error">Neuere Ablesungen vorhanden (${latestAnyDate}), aber noch nicht vollständig. Die Auswertung nutzt aktuell ${data.latest_date}.</div>`;
+                    return `<div class="error">Neuere Ablesungen vorhanden (${formatIsoDate(latestAnyDate)}), aber noch nicht vollständig. Die Auswertung nutzt aktuell ${formatIsoDate(data.latest_date)}.</div>`;
                 }
 
                 return "";
@@ -517,8 +609,8 @@
             }
 
             const toTimestamp = (isoDate) => new Date(`${isoDate}T00:00:00`).getTime();
-            const formatDate = (ts) => new Date(ts).toLocaleDateString("de-DE");
-            const barLabels = verbrauchsReihen.map(r => `${r.von || r.datum} bis ${r.bis || r.datum} (${r.tage || 0} Tage)`);
+            const formatDate = (ts) => dateFormatter.format(new Date(ts));
+            const barLabels = verbrauchsReihen.map(r => `${formatIsoDate(r.von || r.datum)} bis ${formatIsoDate(r.bis || r.datum)} (${r.tage || 0} Tage)`);
             const ablesezeitpunkte = Array.isArray(data.ablesezeitpunkte) ? data.ablesezeitpunkte : [];
             const axisMin = ablesezeitpunkte.length ? toTimestamp(ablesezeitpunkte[0]) : undefined;
             const axisMax = ablesezeitpunkte.length ? toTimestamp(ablesezeitpunkte[ablesezeitpunkte.length - 1]) : undefined;
@@ -582,7 +674,7 @@
                             afterLabel: (context) => {
                                 const point = context.raw || { raw: 0, tage: 0 };
                                 return [
-                                    `Zeitraum: ${point.von || "-"} bis ${point.bis || "-"}`,
+                                    `Zeitraum: ${formatIsoDate(point.von || "-")} bis ${formatIsoDate(point.bis || "-")}`,
                                     `Im Zeitraum: ${num(point.raw || 0)} ${unit} (${point.tage} Tage)`
                                 ];
                             }
@@ -721,7 +813,7 @@
             if (!z) return;
             editZaehlerId = z.id;
             document.getElementById("standort").value = z.standort;
-            document.getElementById("zaehlerstand").value = z.zaehlerstand;
+            document.getElementById("zaehlerstand").value = Math.round(Number(z.zaehlerstand || 0));
             document.getElementById("ablesedatum").value = z.ablesedatum;
             document.getElementById("bemerkung").value = z.bemerkung || "";
             document.getElementById("zaehler-submit").textContent = "Zählerstand aktualisieren";
@@ -739,15 +831,21 @@
         }
 
         async function saveZaehlerstand() {
+            const zaehlerstandInput = Number(document.getElementById("zaehlerstand").value);
             const payload = {
                 standort: document.getElementById("standort").value,
-                zaehlerstand: Number(document.getElementById("zaehlerstand").value),
+                zaehlerstand: zaehlerstandInput,
                 ablesedatum: document.getElementById("ablesedatum").value,
                 bemerkung: document.getElementById("bemerkung").value || null
             };
 
             if (!payload.ablesedatum || !Number.isFinite(payload.zaehlerstand)) {
                 showFeedback("zaehler-feedback", "Bitte Standort, Datum und Zählerstand korrekt ausfüllen", true);
+                return;
+            }
+
+            if (!Number.isInteger(payload.zaehlerstand)) {
+                showFeedback("zaehler-feedback", "Der Zählerstand muss ohne Kommastellen erfasst werden", true);
                 return;
             }
 
@@ -797,10 +895,10 @@
                 document.getElementById("abrechnung-ergebnis").innerHTML = `
                     <div class="abrechnung">
                         <h3>Betriebskostenabrechnung ${data.jahr}</h3>
-                        <div class="abrechnung-row"><span>Zeitraum</span><span>${data.zeitraum_von} bis ${data.zeitraum_bis}</span></div>
+                        <div class="abrechnung-row"><span>Zeitraum</span><span>${formatIsoDate(data.zeitraum_von)} bis ${formatIsoDate(data.zeitraum_bis)}</span></div>
                         <div class="abrechnung-row"><span>Tage</span><span>${data.tage}</span></div>
-                        <div class="abrechnung-row"><span>Zählerstand Beginn</span><span>${kwh(data.zaehlerstand_von)}</span></div>
-                        <div class="abrechnung-row"><span>Zählerstand Ende</span><span>${kwh(data.zaehlerstand_bis)}</span></div>
+                        <div class="abrechnung-row"><span>Zählerstand Beginn</span><span>${zaehlerstandKwh(data.zaehlerstand_von)}</span></div>
+                        <div class="abrechnung-row"><span>Zählerstand Ende</span><span>${zaehlerstandKwh(data.zaehlerstand_bis)}</span></div>
                         <div class="abrechnung-row"><span>Verbrauch</span><span>${kwh(data.verbrauch_kwh)}</span></div>
                         <div class="abrechnung-row"><span>Grundkostenanteil (18 Prozent)</span><span>${euro(data.grundkosten_anteil)}</span></div>
                         <div class="abrechnung-row"><span>Arbeitskosten</span><span>${euro(data.arbeitskosten)}</span></div>

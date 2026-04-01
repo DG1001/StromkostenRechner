@@ -17,7 +17,7 @@
 ### Zählerstand
 - `id`: Integer (PK)
 - `standort`: Enum (HAUS, DACHGESCHOSS, MIETWOHNUNG)
-- `zaehlerstand`: Decimal (kWh)
+- `zaehlerstand`: Integer (kWh, ohne Kommastellen)
 - `ablesedatum`: Date
 - `bemerkung`: Optional String
 - Pro Ablesedatum werden alle drei Standorte erfasst
@@ -41,7 +41,7 @@
 - Kosten pro Tag = Gesamtkosten / Gesamttage
 
 ### Mietwohnung-Abrechnung (Jahr)
-- Zeitraum: Erster Ablesezeitpunkt im Januar des Jahres bis erster Ablesezeitpunkt im Januar des Folgejahres
+- Zeitraum: Erster Ablesezeitpunkt im gewählten Jahr bis erster Ablesezeitpunkt im Folgejahr
 - Grundkosten: 18% des Jahresgrundpreises (nicht tagesgenau)
 - Arbeitskosten: Verbrauch * Arbeitspreis pro kWh
 
@@ -58,6 +58,8 @@
 - Formular zum Erfassen neuer Zählerstände
 - **Bearbeiten** bestehender Zählerstände (Edit-Button)
 - **Löschen** bestehender Zählerstände (Delete-Button)
+- **Filter** nach Standort/Stockwerk (Haus, Dachgeschoss, Mietwohnung)
+- **Sortierung** nach Ablesedatum, Standort oder Zählerstand (auf-/absteigend)
 
 ### Auswertungen
 - Dashboard mit:
@@ -65,15 +67,21 @@
   - Verbrauch pro Tag im Ablesezeitraum (Gesamt + je Stockwerk: Dachgeschoss, Erdgeschoss, Mietwohnung)
   - Angefallene Kosten gesamt im Ablesezeitraum (Gesamt + je Stockwerk)
   - Durchschnittliche Verbrauch/Kosten pro Tag über alle erfassten Zeiträume
+  - Tagesgenaue Verbrauchswerte werden mit 2 Nachkommastellen dargestellt
 
 ### Grafiken
-1. **Liniendiagramm Verbrauch**: Verbrauch über Zeit für alle Stockwerke (Haus, Dachgeschoss, Erdgeschoss, Mietwohnung) als separate Linien
-2. **Liniendiagramm Kosten**: Kosten über Zeit für alle Stockwerke als separate Linien
+1. **Liniendiagramm Verbrauch**: Verbrauch pro Tag über Zeit für alle Stockwerke (Haus, Dachgeschoss, Erdgeschoss, Mietwohnung) als separate Linien mit realer Zeitachse
+2. **Liniendiagramm Kosten**: Kosten pro Tag über Zeit für alle Stockwerke als separate Linien mit realer Zeitachse
 3. **Balkendiagramm**: Verbrauchsanteile der Stockwerke (Dachgeschoss, Erdgeschoss, Mietwohnung) für jeden Zeitraum
 
 ### Mietwohnung-Abrechnung
 - Jahr auswählen
 - Abrechnungsanzeige mit Zählerständen, Verbrauch, Kosten (Grundkosten 18%, Arbeitskosten)
+
+## Darstellungsformat
+- Datumsanzeige im Frontend einheitlich als `tt.mm.jjjj`
+- Zählerstände werden ohne Kommastellen erfasst und dargestellt
+- Tageswerte (z. B. kWh/Tag, EUR/Tag) werden mit 2 Nachkommastellen dargestellt
 
 ## Technische Umsetzung
 - Backend: FastAPI (Python)
