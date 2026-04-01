@@ -1,10 +1,12 @@
 from datetime import date
+import os
 from pathlib import Path
+import tempfile
 from typing import Optional
 import sqlite3
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi import BackgroundTasks, FastAPI, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -13,6 +15,19 @@ app = FastAPI(title="Stromkosten-Rechner")
 BASE_DIR = Path(__file__).parent.parent
 static_dir = BASE_DIR / "static"
 static_dir.mkdir(exist_ok=True)
+
+
+def resolve_db_path() -> Path:
+    configured = os.getenv("STROM_DB_PATH")
+    if not configured:
+        return BASE_DIR / "strom.db"
+    candidate = Path(configured).expanduser()
+    if not candidate.is_absolute():
+        candidate = BASE_DIR / candidate
+    return candidate
+
+
+DB_PATH = resolve_db_path()
 
 app.mount("/static", StaticFiles(directory=str(static_dir)), "static")
 
@@ -36,12 +51,13 @@ STANDORTE = ("HAUS", "DACHGESCHOSS", "MIETWOHNUNG")
 
 
 def get_db():
-    conn = sqlite3.connect(BASE_DIR / "strom.db")
+    conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
 
 def init_db():
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = get_db()
     conn.execute("""CREATE TABLE IF NOT EXISTS tarife (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -58,6 +74,31 @@ def init_db():
     )""")
     conn.commit()
     conn.close()
+
+
+def validate_backup_schema(db_file: Path):
+    conn = sqlite3.connect(db_file)
+    try:
+        cur = conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+        tables = {row[0] for row in cur.fetchall()}
+    finally:
+        conn.close()
+
+    required_tables = {"tarife", "zaehlerstaende"}
+    missing = required_tables - tables
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Backup-Datei ungültig: fehlende Tabellen " + ", ".join(sorted(missing))
+            ),
+        )
+
+
+def cleanup_file(path: str):
+    p = Path(path)
+    if p.exists():
+        p.unlink()
 
 
 def get_reading(
@@ -309,6 +350,61 @@ def delete_zaehlerstand(zaehlerstand_id: int):
     conn.commit()
     conn.close()
     return {"status": "ok"}
+
+
+@app.get("/api/db/backup")
+def backup_database(background_tasks: BackgroundTasks):
+    if not DB_PATH.exists():
+        init_db()
+
+    fd, temp_file = tempfile.mkstemp(prefix="strom_backup_", suffix=".db")
+    os.close(fd)
+    temp_path = Path(temp_file)
+
+    source_conn = get_db()
+    backup_conn = sqlite3.connect(temp_path)
+    try:
+        source_conn.backup(backup_conn)
+    finally:
+        backup_conn.close()
+        source_conn.close()
+
+    filename = f"strom_backup_{date.today().isoformat()}.db"
+    background_tasks.add_task(cleanup_file, str(temp_path))
+
+    return FileResponse(
+        path=str(temp_path),
+        media_type="application/octet-stream",
+        filename=filename,
+    )
+
+
+@app.post("/api/db/restore")
+async def restore_database(backup_file: UploadFile = File(...)):
+    if not backup_file.filename or not backup_file.filename.lower().endswith(".db"):
+        raise HTTPException(status_code=400, detail="Bitte eine .db-Datei hochladen")
+
+    fd, temp_file = tempfile.mkstemp(prefix="strom_restore_", suffix=".db")
+    os.close(fd)
+    temp_path = Path(temp_file)
+
+    try:
+        content = await backup_file.read()
+        if not content:
+            raise HTTPException(
+                status_code=400, detail="Leere Datei kann nicht importiert werden"
+            )
+
+        temp_path.write_bytes(content)
+        validate_backup_schema(temp_path)
+
+        DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+        os.replace(temp_path, DB_PATH)
+        return {"status": "ok"}
+    finally:
+        await backup_file.close()
+        if temp_path.exists():
+            temp_path.unlink()
 
 
 # === AUSWERTUNG ===

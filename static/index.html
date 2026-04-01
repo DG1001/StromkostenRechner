@@ -286,6 +286,23 @@
             </div>
             <div id="abrechnung-ergebnis"></div>
         </div>
+
+        <div class="card">
+            <h2>Daten sichern und wiederherstellen</h2>
+            <div id="backup-feedback"></div>
+            <div class="actions" style="margin-bottom: 10px;">
+                <button onclick="downloadBackup()">Backup herunterladen</button>
+            </div>
+            <div class="form-row">
+                <div>
+                    <label>Backup-Datei (.db)</label>
+                    <input type="file" id="restore-file" accept=".db,application/octet-stream">
+                </div>
+                <div style="align-self: end;">
+                    <button class="secondary" onclick="restoreBackup()">Backup einspielen</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -907,6 +924,35 @@
                 `;
             } catch (error) {
                 document.getElementById("abrechnung-ergebnis").innerHTML = `<div class="error">${error.message}</div>`;
+            }
+        }
+
+        function downloadBackup() {
+            window.location.href = `/api/db/backup?_ts=${Date.now()}`;
+        }
+
+        async function restoreBackup() {
+            const input = document.getElementById("restore-file");
+            const file = input.files && input.files[0];
+
+            if (!file) {
+                showFeedback("backup-feedback", "Bitte zuerst eine Backup-Datei auswählen", true);
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append("backup_file", file);
+
+            try {
+                await api("/api/db/restore", {
+                    method: "POST",
+                    body: formData
+                });
+                showFeedback("backup-feedback", "Backup erfolgreich eingespielt");
+                input.value = "";
+                await loadData();
+            } catch (error) {
+                showFeedback("backup-feedback", error.message, true);
             }
         }
 

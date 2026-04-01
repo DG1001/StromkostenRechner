@@ -78,6 +78,11 @@
 - Jahr auswählen
 - Abrechnungsanzeige mit Zählerständen, Verbrauch, Kosten (Grundkosten 18%, Arbeitskosten)
 
+### Daten-Backup und Wiederherstellung
+- Backup der SQLite-Datenbank über die UI herunterladen
+- Backup-Datei (`.db`) über die UI wieder einspielen
+- Beim Restore wird die Backup-Datei auf gültige Tabellenstruktur geprüft
+
 ## Darstellungsformat
 - Datumsanzeige im Frontend einheitlich als `tt.mm.jjjj`
 - Zählerstände werden ohne Kommastellen erfasst und dargestellt
@@ -86,5 +91,11 @@
 ## Technische Umsetzung
 - Backend: FastAPI (Python)
 - Frontend: HTML + vanilla JS + Chart.js
-- Datenhaltung: SQLite (einfache Datei)
+- Datenhaltung: SQLite (Dateipfad über `STROM_DB_PATH` konfigurierbar)
 - Port: 8000, Host: 0.0.0.0
+
+## Deployment
+- Containerisierung über Docker (`Dockerfile`)
+- Persistente Daten in Container-Umgebungen über Volume-Mount auf den DB-Pfad (z. B. `/data/strom.db`)
+- CI/CD via GitHub Actions: Bei Push auf `main` wird ein Multi-Arch-Image (`linux/amd64`, `linux/arm64`) gebaut und nach GHCR veröffentlicht
+- Ziel-Registry: `ghcr.io/dg1001/<repo-name>`
